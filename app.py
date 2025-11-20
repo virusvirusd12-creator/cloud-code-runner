@@ -76,8 +76,8 @@ def lint_code():
 # 🔵 تشغيل التطبيق
 # -----------------------------
 @app.route("/")
-def home():
-    return send_from_directory('frontend','indec.hyml')
+def index():
+    return send_from_directory("frontend","index.hyml")
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
