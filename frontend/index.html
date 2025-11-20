@@ -44,6 +44,10 @@
       outline: none;
       background: #f8f9fc;
       color: #000;
+
+      /* اجبار النص أن يظهر من اليسار */
+      direction: ltr;
+      text-align: left;
     }
 
     .btns {
@@ -64,19 +68,11 @@
       transition: 0.2s;
     }
 
-    #run {
-      background: #1cc88a;
-    }
-    #run:hover {
-      background: #17a673;
-    }
+    #run { background: #1cc88a; }
+    #run:hover { background: #17a673; }
 
-    #lint {
-      background: #4e73df;
-    }
-    #lint:hover {
-      background: #3659c9;
-    }
+    #lint { background: #4e73df; }
+    #lint:hover { background: #3659c9; }
 
     .output-label {
       margin-top: 20px;
@@ -110,6 +106,7 @@
 
 <label>اكتب كود Python هنا:</label>
 
+
 <textarea id="code"></textarea>
 
 <div class="btns">
@@ -131,21 +128,28 @@
       return r.json();
     }
 
+    // تشغيل الكود
     document.getElementById("run").onclick = async () => {
       document.getElementById("output").textContent = "جاري التشغيل...";
       try {
         const code = document.getElementById("code").value;
         const res = await postJson("/run", { language: "python", code });
 
-        if (res.error)
-          document.getElementById("output").textContent = "خطأ: " + res.error;
-        else
-          document.getElementById("output").textContent = res.output || "(بدون مخرج)";
+        // خطأ في الكود؟
+        if (res.error) {
+          document.getElementById("output").textContent =
+"⚠️ خطأ في الكود:\n" + res.error;
+        } else {
+          document.getElementById("output").textContent =
+            res.output || "(بدون مخرجات)";
+        }
+
       } catch (e) {
-        document.getElementById("output").textContent = "خطأ في الاتصال: " + e;
+        document.getElementById("output").textContent = "❌ خطأ اتصال: " + e;
       }
     };
 
+    // تصحيح التنسيق فقط
     document.getElementById("lint").onclick = async () => {
       document.getElementById("output").textContent = "جاري التحقق...";
       try {
@@ -155,13 +159,14 @@
         if (res.fixed_code) {
           document.getElementById("code").value = res.fixed_code;
           document.getElementById("output").textContent =
-"تم تحسين وتنسيق الكود بنجاح.";
+"✅ تم تنسيق الكود بنجاح!";
         } else {
           document.getElementById("output").textContent =
-            res.message || "لا توجد نتائج";
+"⚠️ لا توجد تعديلات مطلوبة";
         }
+
       } catch (e) {
-        document.getElementById("output").textContent = "خطأ: " + e;
+        document.getElementById("output").textContent = "❌ خطأ: " + e;
       }
     };
 </script>
