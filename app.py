@@ -77,7 +77,7 @@ def lint_code():
 # -----------------------------
 @app.route("/")
 def home():
-    return "Cloud Code Runner is running successfully!"
+    return send_from_directory('frontend','indec.hyml')
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
