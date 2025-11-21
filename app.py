@@ -1,83 +1,99 @@
-from flask import Flask, request, jsonify
-import subprocess
-import tempfile
-import os
+from flask import Flask, request, jsonify, send_from_directory
+import tempfile, subprocess, os, sys, shutil, ast
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='frontend', static_url_path='')
 
 
-# -----------------------------
-# 🔵 API: تشغيل كود Python
-# -----------------------------
-@app.route("/run", methods=["POST"])
+# ----------------------
+# تقديم صفحة HTML
+# ----------------------
+@app.route('/')
+def index():
+    return send_from_directory('frontend', 'index.html')
+
+
+# ----------------------
+# API تشغيل كود Python
+# ----------------------
+@app.route('/run', methods=['POST'])
 def run_code():
+    data = request.get_json() or {}
+    code = data.get('code', '')
+    lang = data.get('language', 'python')
+
+    # دعم بايثون فقط الآن
+    if lang != 'python':
+        return jsonify({"output": "", "error": "الواجهة تدعم Python فقط الآن"}), 400
+
+    # فحص أخطاء Syntax قبل التشغيل
     try:
-        data = request.get_json()
-        code = data.get("code", "")
+        ast.parse(code)
+    except SyntaxError as se:
+        return jsonify({"output": "", "error": f"SyntaxError: {se}"}), 200
 
-        if not code.strip():
-            return jsonify({"error": "الكود فارغ، الرجاء كتابة شيء."})
+    # إنشاء ملف مؤقت وتشغيله
+    tmpdir = tempfile.mkdtemp(prefix="run_")
+    file_path = os.path.join(tmpdir, "code.py")
 
-        # إنشاء ملف مؤقت لتشغيل الكود
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".py") as temp:
-            temp.write(code.encode("utf-8"))
-            temp.flush()
-            filename = temp.name
+    with open(file_path, "w", encoding="utf-8") as f:
+        f.write(code)
 
-        # تشغيل الكود باستخدام Python
-        result = subprocess.run(
-            ["python3", filename],
-            capture_output=True,
-            text=True,
-            timeout=8
+    try:
+        proc = subprocess.run(
+            [sys.executable, file_path],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            universal_newlines=True,
+            timeout=5,
         )
 
-        output = result.stdout
-        error = result.stderr
+        stdout = proc.stdout
+        stderr = proc.stderr
 
-        os.unlink(filename)
+        combined = stdout
+        if stderr:
+            combined += "\n[stderr]\n" + stderr
 
-        if error:
-            return jsonify({"error": error})
-
-        return jsonify({"output": output})
+        return jsonify({"output": combined, "error": ""})
 
     except subprocess.TimeoutExpired:
-        return jsonify({"error": "تنبيه: الكود أخذ وقتاً طويلاً وتوقف التنفيذ."})
+        return jsonify({"output": "", "error": "خطأ: انتهت مهلة التشغيل (Timeout)"})
 
     except Exception as e:
-        return jsonify({"error": f"خطأ غير متوقع: {str(e)}"})
+        return jsonify({"output": "", "error": f"خطأ داخلي: {e}"})
+
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)
 
 
-# -----------------------------
-# 🔵 API: تنسيق — Lint
-# -----------------------------
-@app.route("/lint", methods=["POST"])
+# ----------------------
+# API تنسيق الكود
+# ----------------------
+@app.route('/lint', methods=['POST'])
 def lint_code():
-    data = request.get_json()
-    code = data.get("code", "")
-
-    if not code.strip():
-        return jsonify({"message": "لا يوجد كود لتنسيقه."})
+    data = request.get_json() or {}
+    code = data.get('code', '')
 
     try:
         import autopep8
         fixed = autopep8.fix_code(code)
         return jsonify({"fixed_code": fixed})
 
-    except Exception as e:
-        return jsonify({
-"message": "تعذر تحسين التنسيق.",
-"error": str(e)
-        })
+    except Exception:
+        # fallback إذا autopep8 غير موجود
+        try:
+            ast.parse(code)
+            return jsonify({"fixed_code": None, "message": "لا توجد أخطاء في بنية الكود"})
+        except SyntaxError as se:
+            return jsonify({"fixed_code": None, "message": f"SyntaxError: {se}"})
 
 
-# -----------------------------
-# 🔵 تشغيل التطبيق
-# -----------------------------
-@app.route("/")
-def index():
-    return send_from_directory("frontend","index.hyml")
-
+# ----------------------
+# تشغيل السيرفر محلياً
+# ----------------------
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=10000)
+    app.run(
+        host="0.0.0.0",
+        port=int(os.environ.get("PORT", 5000)),
+        debug=True
+    )
